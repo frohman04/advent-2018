@@ -1,5 +1,5 @@
 import fileinput
-from typing import Dict, List, Tuple
+from typing import List
 import unittest
 
 
