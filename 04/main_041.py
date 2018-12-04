@@ -9,6 +9,19 @@ BASE_PARSER = re.compile(r'\[([^]]+)\] (.*)')
 GUARD_PARSER = re.compile(r'Guard #([0-9]+) begins shift')
 
 
+class RawEvent(object):
+    def __init__(self, time: datetime.datetime, desc: str):
+        self.time = time
+        self.desc = desc
+
+    def __eq__(self, other):
+        return (self.time == other.time and
+                self.desc == other.desc)
+
+    def __repr__(self):
+        return 'RawEvent({}, {})'.format(self.time, self.desc)
+
+
 class Event(object):
     def __init__(self, time: datetime.datetime, guard_num: int):
         self._guard_num = guard_num
@@ -67,22 +80,33 @@ class Window(object):
         return 'Window({}, {}, {})'.format(self.guard_num, self.start_min, self.end_min)
 
 
-def parse_line(line: str, curr_guard_num: int) -> Event:
+def parse_line_raw(line: str) -> RawEvent:
     timestamp_str, event_str = BASE_PARSER.findall(line)[0]
     timestamp = datetime.datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M')
-    if 'Guard' in event_str:
-        return OnDuty(timestamp, int(GUARD_PARSER.findall(event_str)[0]))
-    elif event_str == 'falls asleep':
-        return Sleep(timestamp, curr_guard_num)
-    elif event_str == 'wakes up':
-        return Wake(timestamp, curr_guard_num)
+    return RawEvent(timestamp, event_str)
+
+
+def parse_line(raw_event: RawEvent, curr_guard_num: int) -> Event:
+    if 'Guard' in raw_event.desc:
+        return OnDuty(raw_event.time, int(GUARD_PARSER.findall(raw_event.desc)[0]))
+    elif raw_event.desc == 'falls asleep':
+        return Sleep(raw_event.time, curr_guard_num)
+    elif raw_event.desc == 'wakes up':
+        return Wake(raw_event.time, curr_guard_num)
 
 
 def parse(lines: List[str]) -> List[Event]:
+    raw_events = []
+    for line in lines:
+        raw_event = parse_line_raw(line)
+        raw_events.append(raw_event)
+
+    raw_events = sorted(raw_events, key=lambda x: x.time)
+
     curr_guard_num = None
     events = []
-    for line in lines:
-        event = parse_line(line, curr_guard_num)
+    for raw_event in raw_events:
+        event = parse_line(raw_event, curr_guard_num)
         events.append(event)
         if isinstance(event, OnDuty):
             curr_guard_num = event.get_guard_num()
@@ -153,24 +177,38 @@ if __name__ == '__main__':
 
 
 class Test041(unittest.TestCase):
-    def test_parse_line_guard_init(self):
+    def test_parse_line_raw(self):
         self.assertEqual(
-            parse_line('[1518-11-01 00:00] Guard #10 begins shift', None),
+            parse_line_raw('[1518-11-01 00:00] Guard #10 begins shift'),
+            RawEvent(datetime.datetime(1518, 11, 1, 0, 0), 'Guard #10 begins shift')
+        )
+
+    def test_parse_line__guard_init(self):
+        self.assertEqual(
+            parse_line(
+                RawEvent(datetime.datetime(1518, 11, 1, 0, 0), 'Guard #10 begins shift'),
+                None),
             OnDuty(datetime.datetime(1518, 11, 1, 0, 0), 10))
 
-    def test_parse_line_guard_subsequent(self):
+    def test_parse_line__guard_subsequent(self):
         self.assertEqual(
-            parse_line('[1518-11-01 00:00] Guard #10 begins shift', 5),
+            parse_line(
+                RawEvent(datetime.datetime(1518, 11, 1, 0, 0), 'Guard #10 begins shift'),
+                5),
             OnDuty(datetime.datetime(1518, 11, 1, 0, 0), 10))
 
-    def test_parse_line_sleep(self):
+    def test_parse_line__sleep(self):
         self.assertEqual(
-            parse_line('[1518-11-01 00:05] falls asleep', 10),
+            parse_line(
+                RawEvent(datetime.datetime(1518, 11, 1, 0, 5), 'falls asleep'),
+                10),
             Sleep(datetime.datetime(1518, 11, 1, 0, 5), 10))
 
-    def test_parse_line_wake(self):
+    def test_parse_line__wake(self):
         self.assertEqual(
-            parse_line('[1518-11-01 00:25] wakes up', 10),
+            parse_line(
+                RawEvent(datetime.datetime(1518, 11, 1, 0, 25), 'wakes up'),
+                10),
             Wake(datetime.datetime(1518, 11, 1, 0, 25), 10))
 
     def test_parse(self):
@@ -182,6 +220,26 @@ class Test041(unittest.TestCase):
                 '[1518-11-01 23:58] Guard #99 begins shift',
                 '[1518-11-02 00:40] falls asleep',
                 '[1518-11-02 00:50] wakes up'
+            ]),
+            [
+                OnDuty(datetime.datetime(1518, 11, 1, 0, 0), 10),
+                Sleep(datetime.datetime(1518, 11, 1, 0, 5), 10),
+                Wake(datetime.datetime(1518, 11, 1, 0, 25), 10),
+                OnDuty(datetime.datetime(1518, 11, 1, 23, 58), 99),
+                Sleep(datetime.datetime(1518, 11, 2, 0, 40), 99),
+                Wake(datetime.datetime(1518, 11, 2, 0, 50), 99)
+            ]
+        )
+
+    def test_parse__out_of_order(self):
+        self.assertEqual(
+            parse([
+                '[1518-11-01 00:05] falls asleep',
+                '[1518-11-01 23:58] Guard #99 begins shift',
+                '[1518-11-01 00:00] Guard #10 begins shift',
+                '[1518-11-01 00:25] wakes up',
+                '[1518-11-02 00:50] wakes up',
+                '[1518-11-02 00:40] falls asleep',
             ]),
             [
                 OnDuty(datetime.datetime(1518, 11, 1, 0, 0), 10),
