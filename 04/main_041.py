@@ -108,20 +108,48 @@ def find_sleepiest_guard(windows: List[Window]) -> int:
     guards = defaultdict(lambda: 0)
     for window in windows:
         guards[window.guard_num] += (window.end_min - window.start_min)
+
     sleepiest = -1
     most_sleep = -1
     for guard, sleep_time in guards.items():
         if sleep_time > most_sleep:
             most_sleep = sleep_time
             sleepiest = guard
+
     return sleepiest
+
+
+def find_sleepiest_minute(windows: List[Window], guard_num: int) -> int:
+    minutes = [0] * 60
+    for window in windows:
+        if window.guard_num == guard_num:
+            for i in range(window.start_min, window.end_min):
+                minutes[i] += 1
+
+    freq_minute = -1
+    times_slept = -1
+    for i in range(len(minutes)):
+        if minutes[i] > times_slept:
+            times_slept = minutes[i]
+            freq_minute = i
+
+    return freq_minute
+
+
+def process(lines: List[str]) -> int:
+    events = parse(lines)
+    windows = build_windows(events)
+    sleepiest_guard = find_sleepiest_guard(windows)
+    sleepiest_minute = find_sleepiest_minute(windows, sleepiest_guard)
+    return sleepiest_guard * sleepiest_minute
 
 
 if __name__ == '__main__':
     lines = []
     for line in fileinput.input():
         lines += [line.strip()]
-    print(parse(lines))
+
+    print(process(lines))
 
 
 class Test041(unittest.TestCase):
@@ -192,4 +220,44 @@ class Test041(unittest.TestCase):
                 Window(99, 45, 55)
             ]),
             10
+        )
+
+    def test_find_sleepiest_minute(self):
+        self.assertEqual(
+            find_sleepiest_minute(
+                [
+                    Window(10, 5, 25),
+                    Window(10, 30, 55),
+                    Window(99, 40, 50),
+                    Window(10, 24, 29),
+                    Window(99, 36, 46),
+                    Window(99, 45, 55)
+                ],
+                10
+            ),
+            24
+        )
+
+    def test_process(self):
+        self.assertEqual(
+            process([
+                '[1518-11-01 00:00] Guard #10 begins shift',
+                '[1518-11-01 00:05] falls asleep',
+                '[1518-11-01 00:25] wakes up',
+                '[1518-11-01 00:30] falls asleep',
+                '[1518-11-01 00:55] wakes up',
+                '[1518-11-01 23:58] Guard #99 begins shift',
+                '[1518-11-02 00:40] falls asleep',
+                '[1518-11-02 00:50] wakes up',
+                '[1518-11-03 00:05] Guard #10 begins shift',
+                '[1518-11-03 00:24] falls asleep',
+                '[1518-11-03 00:29] wakes up',
+                '[1518-11-04 00:02] Guard #99 begins shift',
+                '[1518-11-04 00:36] falls asleep',
+                '[1518-11-04 00:46] wakes up',
+                '[1518-11-05 00:03] Guard #99 begins shift',
+                '[1518-11-05 00:45] falls asleep',
+                '[1518-11-05 00:55] wakes up'
+            ]),
+            240
         )
