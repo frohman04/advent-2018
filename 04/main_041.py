@@ -1,3 +1,4 @@
+from collections import defaultdict
 import datetime
 import fileinput
 import re
@@ -51,6 +52,21 @@ class Wake(Event):
         return 'Wake({}, {})'.format(self._time, self._guard_num)
 
 
+class Window(object):
+    def __init__(self, guard_num: int, start_min: int, end_min: int):
+        self.guard_num = guard_num
+        self.start_min = start_min
+        self.end_min = end_min
+
+    def __eq__(self, other):
+        return (self.guard_num == other.guard_num and
+                self.start_min == other.start_min and
+                self.end_min == other.end_min)
+
+    def __repr__(self):
+        return 'Window({}, {}, {})'.format(self.guard_num, self.start_min, self.end_min)
+
+
 def parse_line(line: str, curr_guard_num: int) -> Event:
     timestamp_str, event_str = BASE_PARSER.findall(line)[0]
     timestamp = datetime.datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M')
@@ -71,6 +87,21 @@ def parse(lines: List[str]) -> List[Event]:
         if isinstance(event, OnDuty):
             curr_guard_num = event.get_guard_num()
     return events
+
+
+def build_windows(events: List[Event]) -> List[Window]:
+    guards = {}
+    windows = []
+    for event in events:
+        if isinstance(event, Sleep):
+            guards[event.get_guard_num()] = event.get_time().minute
+        elif isinstance(event, Wake):
+            windows.append(Window(
+                event.get_guard_num(),
+                guards[event.get_guard_num()],
+                event.get_time().minute))
+            del guards[event.get_guard_num()]
+    return windows
 
 
 if __name__ == '__main__':
@@ -118,5 +149,21 @@ class Test041(unittest.TestCase):
                 OnDuty(datetime.datetime(1518, 11, 1, 23, 58), 99),
                 Sleep(datetime.datetime(1518, 11, 2, 0, 40), 99),
                 Wake(datetime.datetime(1518, 11, 2, 0, 50), 99)
+            ]
+        )
+
+    def test_build_windows(self):
+        self.assertEqual(
+            build_windows([
+                OnDuty(datetime.datetime(1518, 11, 1, 0, 0), 10),
+                Sleep(datetime.datetime(1518, 11, 1, 0, 5), 10),
+                Wake(datetime.datetime(1518, 11, 1, 0, 25), 10),
+                OnDuty(datetime.datetime(1518, 11, 1, 23, 58), 99),
+                Sleep(datetime.datetime(1518, 11, 2, 0, 40), 99),
+                Wake(datetime.datetime(1518, 11, 2, 0, 50), 99)
+            ]),
+            [
+                Window(10, 5, 25),
+                Window(99, 40, 50)
             ]
         )
