@@ -104,6 +104,19 @@ def build_windows(events: List[Event]) -> List[Window]:
     return windows
 
 
+def find_sleepiest_guard(windows: List[Window]) -> int:
+    guards = defaultdict(lambda: 0)
+    for window in windows:
+        guards[window.guard_num] += (window.end_min - window.start_min)
+    sleepiest = -1
+    most_sleep = -1
+    for guard, sleep_time in guards.items():
+        if sleep_time > most_sleep:
+            most_sleep = sleep_time
+            sleepiest = guard
+    return sleepiest
+
+
 if __name__ == '__main__':
     lines = []
     for line in fileinput.input():
@@ -166,4 +179,17 @@ class Test041(unittest.TestCase):
                 Window(10, 5, 25),
                 Window(99, 40, 50)
             ]
+        )
+
+    def test_find_sleepiest_guard(self):
+        self.assertEqual(
+            find_sleepiest_guard([
+                Window(10, 5, 25),
+                Window(10, 30, 55),
+                Window(99, 40, 50),
+                Window(10, 24, 29),
+                Window(99, 36, 46),
+                Window(99, 45, 55)
+            ]),
+            10
         )
