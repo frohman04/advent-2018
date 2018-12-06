@@ -1,22 +1,44 @@
 import fileinput
+from typing import List
 import unittest
 
 
 def process(polymer: str) -> int:
+    def get_next_idx(curr_idx: int) -> int:
+        next_idx = curr_idx + 1
+        while next_idx < len(bitmap) and not bitmap[next_idx]:
+            next_idx += 1
+
+        if next_idx == len(bitmap):
+            return None
+        else:
+            return next_idx
+
+    def get_len() -> int:
+        return len([x for x in bitmap if x])
+
+    bitmap = [True] * len(polymer)
+
     change_made = True
-    while change_made and len(polymer) > 0:
+    while change_made and get_len() > 0:
         change_made = False
-        next_polymer = polymer[0]
-        for i in range(1, len(polymer)):
-            if (not change_made
-                    and polymer[i] != polymer[i - 1]
-                    and polymer[i].lower() == polymer[i - 1].lower()):
-                next_polymer = next_polymer[:-1]
+        curr_idx = get_next_idx(-1)
+        next_idx = get_next_idx(curr_idx)
+        while next_idx is not None:
+            curr_unit = polymer[curr_idx]
+            next_unit = polymer[next_idx]
+            if curr_unit != next_unit and curr_unit.upper() == next_unit.upper():
+                bitmap[curr_idx] = False
+                bitmap[next_idx] = False
+
                 change_made = True
-            else:
-                next_polymer += polymer[i]
-        polymer = next_polymer
-    return len(polymer)
+
+                break
+
+            curr_idx = next_idx
+            next_idx = get_next_idx(curr_idx)
+
+    return get_len()
 
 
 if __name__ == '__main__':
