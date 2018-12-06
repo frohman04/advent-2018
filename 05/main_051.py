@@ -1,5 +1,4 @@
 import fileinput
-from typing import List
 import unittest
 
 
